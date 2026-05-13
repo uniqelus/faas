@@ -1,0 +1,37 @@
+id	title	milestone	size	areas
+T0.1	Proto-контракты и кодген	M0 Foundation	M	proto
+T0.2	HTTP server component в pkg	M0 Foundation	S	pkg
+T0.3	gRPC-gateway component в pkg	M0 Foundation	M	pkg
+T0.4	Пакет observability	M0 Foundation	M	pkg,observability
+T0.5	Бинарь control-plane	M0 Foundation	S	control-plane
+T0.6	Обновить api-gateway	M0 Foundation	S	gateway,observability
+T0.7	Доменная модель Function	M0 Foundation	S	control-plane
+T0.8	Маппинг proto ↔ domain	M0 Foundation	S	control-plane,proto
+T1.1	k3d через Terraform	M1 Infra	M	terraform
+T1.2	Dockerfiles для сервисов	M1 Infra	S	terraform
+T1.3	Сборка и загрузка образов в k3d	M1 Infra	S	terraform
+T1.4	Helm umbrella — скелет	M1 Infra	S	helm
+T1.5	Helm — control-plane	M1 Infra	M	helm,control-plane
+T1.6	Helm — api-gateway	M1 Infra	M	helm,gateway
+T1.7	Postgres как subchart	M1 Infra	S	helm,storage
+T1.8	Observability — Prometheus + Grafana	M1 Infra	M	helm,observability
+T1.9	Observability — Jaeger + OTel Collector	M1 Infra	M	helm,observability
+T1.10	Корневой Terraform	M1 Infra	M	terraform
+T2.1	Миграции Postgres	M2 Lifecycle	M	storage
+T2.2	Репозиторий функций	M2 Lifecycle	M	storage,control-plane
+T2.3	gRPC handlers FunctionService	M2 Lifecycle	M	control-plane,proto
+T2.4	grpc-gateway routing	M2 Lifecycle	S	control-plane
+T2.5	K8s client wrapper	M2 Lifecycle	S	control-plane
+T2.6	Реконсайлер	M2 Lifecycle	L	reconciler
+T2.7	Gateway invoke handler	M2 Lifecycle	M	gateway
+T2.8	Стриминг логов	M2 Lifecycle	M	control-plane
+T2.9	Инструментирование observability	M2 Lifecycle	M	observability
+T2.10	Эталонная функция hello-go	M2 Lifecycle	S	control-plane
+T3.1	E2E харнес	M3 E2E	M	e2e
+T3.2	Сценарии lifecycle	M3 E2E	M	e2e
+T3.3	Контрактные тесты	M3 E2E	S	e2e,proto
+T3.4	CI workflow	M3 E2E	M	ci
+T4.1	k6-сценарии	M4 Load	M	load
+T4.2	Скрипт baseline	M4 Load	S	load
+T4.3	Документ baseline	M4 Load	S	load
+T4.4	Финальные дашборды Grafana	M4 Load	S	helm,observability
