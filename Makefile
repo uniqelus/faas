@@ -4,6 +4,8 @@ BINARIES_GOOS ?= linux
 BINARIES_GOARCH ?= amd64
 BINARIES_CGO_ENABLED ?= 0
 
+PROTO_DIR ?= api/proto
+
 binaries: $(addsuffix -binary, $(SERVICES))
 %-binary:
 	@mkdir -p bin
@@ -18,5 +20,14 @@ lint:
 test: lint
 	go test $(if $(RACE),-race,) ./...
 
-.PHONY: binaries clean lint test
+proto-gen:
+	$(MAKE) -C $(PROTO_DIR) generate
+
+proto-lint:
+	$(MAKE) -C $(PROTO_DIR) lint
+
+proto-breaking:
+	$(MAKE) -C $(PROTO_DIR) breaking
+
+.PHONY: binaries clean lint test proto-gen proto-lint proto-breaking
 

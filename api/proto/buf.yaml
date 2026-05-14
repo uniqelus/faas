@@ -1,0 +1,19 @@
+version: v2
+modules:
+  - path: .
+deps:
+  - buf.build/googleapis/googleapis
+  - buf.build/grpc-ecosystem/grpc-gateway
+lint:
+  use:
+    - STANDARD
+  except:
+    # The RPC names live on a resource service (FunctionService.Create) but
+    # request/response messages keep the resource in their name
+    # (CreateFunctionRequest). That matches AIP-122 but trips the
+    # buf-style "<RpcName>Request" check.
+    - RPC_REQUEST_STANDARD_NAME
+    - RPC_RESPONSE_STANDARD_NAME
+breaking:
+  use:
+    - FILE

@@ -1,0 +1,482 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "FaaS Control API",
+    "description": "Control-plane API for managing functions on the FaaS platform.",
+    "version": "v1"
+  },
+  "tags": [
+    {
+      "name": "FunctionService"
+    }
+  ],
+  "schemes": [
+    "http"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/v1/functions": {
+      "get": {
+        "summary": "List paginates over all registered functions.",
+        "operationId": "FunctionService_List",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListFunctionsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "pageSize",
+            "description": "page_size is a hint; the server may return fewer items.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageToken",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "FunctionService"
+        ]
+      },
+      "post": {
+        "summary": "Create registers a new function with the platform. The reconciler will\npick it up asynchronously and converge cluster state to the spec.",
+        "operationId": "FunctionService_Create",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateFunctionResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "function",
+            "description": "function holds the desired spec. Output-only fields are ignored.",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1Function"
+            }
+          }
+        ],
+        "tags": [
+          "FunctionService"
+        ]
+      }
+    },
+    "/v1/functions/{function.name}": {
+      "patch": {
+        "summary": "Update replaces the mutable parts of a function spec. The new version is\nallocated by the server.",
+        "operationId": "FunctionService_Update",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1UpdateFunctionResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "function.name",
+            "description": "name uniquely identifies the function within the platform. It MUST match\nDNS-1123 label rules so it can be used as a Kubernetes resource name.",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "function",
+            "description": "function carries the new desired state; function.name selects the target.",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "image": {
+                  "type": "string",
+                  "description": "image is a fully-qualified OCI image reference the platform will deploy."
+                },
+                "replicas": {
+                  "type": "integer",
+                  "format": "int32",
+                  "description": "replicas is the desired number of pods serving this function."
+                },
+                "env": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "description": "env is a flat key/value map of environment variables to inject into the\nfunction's pod template."
+                },
+                "version": {
+                  "type": "string",
+                  "format": "int64",
+                  "description": "version is monotonically incremented by the control-plane on each spec\nmutation. It is filled by the server.",
+                  "readOnly": true
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "readOnly": true
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "readOnly": true
+                },
+                "status": {
+                  "$ref": "#/definitions/v1FunctionStatus",
+                  "description": "status is the observed state of the function.",
+                  "readOnly": true
+                }
+              },
+              "title": "function carries the new desired state; function.name selects the target.",
+              "required": [
+                "image",
+                "function"
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "FunctionService"
+        ]
+      }
+    },
+    "/v1/functions/{name}": {
+      "get": {
+        "summary": "Get returns the current desired spec and observed status of a function.",
+        "operationId": "FunctionService_Get",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetFunctionResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "FunctionService"
+        ]
+      },
+      "delete": {
+        "summary": "Delete marks a function for deletion. The reconciler will tear down\nKubernetes resources and remove the database row once drained.",
+        "operationId": "FunctionService_Delete",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteFunctionResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "FunctionService"
+        ]
+      }
+    },
+    "/v1/functions/{name}/logs": {
+      "get": {
+        "summary": "GetLogs streams log lines aggregated across all pods backing the\nfunction. The stream stays open while follow=true; otherwise it closes\nafter backfill is drained.",
+        "operationId": "FunctionService_GetLogs",
+        "responses": {
+          "200": {
+            "description": "A successful response.(streaming responses)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "$ref": "#/definitions/v1LogEntry"
+                },
+                "error": {
+                  "$ref": "#/definitions/rpcStatus"
+                }
+              },
+              "title": "Stream result of v1LogEntry"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "follow",
+            "description": "follow keeps the stream open and pushes new log lines as they arrive.",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "tailLines",
+            "description": "tail_lines, if positive, limits the initial backfill from the most recent\nlog lines.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "since",
+            "description": "since, when set, filters out log lines emitted before this timestamp.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          }
+        ],
+        "tags": [
+          "FunctionService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "v1CreateFunctionResponse": {
+      "type": "object",
+      "properties": {
+        "function": {
+          "$ref": "#/definitions/v1Function"
+        }
+      }
+    },
+    "v1DeleteFunctionResponse": {
+      "type": "object"
+    },
+    "v1Function": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "name uniquely identifies the function within the platform. It MUST match\nDNS-1123 label rules so it can be used as a Kubernetes resource name."
+        },
+        "image": {
+          "type": "string",
+          "description": "image is a fully-qualified OCI image reference the platform will deploy."
+        },
+        "replicas": {
+          "type": "integer",
+          "format": "int32",
+          "description": "replicas is the desired number of pods serving this function."
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "env is a flat key/value map of environment variables to inject into the\nfunction's pod template."
+        },
+        "version": {
+          "type": "string",
+          "format": "int64",
+          "description": "version is monotonically incremented by the control-plane on each spec\nmutation. It is filled by the server.",
+          "readOnly": true
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "readOnly": true
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "readOnly": true
+        },
+        "status": {
+          "$ref": "#/definitions/v1FunctionStatus",
+          "description": "status is the observed state of the function.",
+          "readOnly": true
+        }
+      },
+      "description": "Function describes a user function deployed on the platform.",
+      "required": [
+        "name",
+        "image"
+      ]
+    },
+    "v1FunctionPhase": {
+      "type": "string",
+      "enum": [
+        "FUNCTION_PHASE_UNSPECIFIED",
+        "FUNCTION_PHASE_PENDING",
+        "FUNCTION_PHASE_READY",
+        "FUNCTION_PHASE_DEGRADED",
+        "FUNCTION_PHASE_DELETING",
+        "FUNCTION_PHASE_FAILED"
+      ],
+      "default": "FUNCTION_PHASE_UNSPECIFIED",
+      "description": "FunctionPhase describes the high-level lifecycle state of a function as\nobserved by the reconciler."
+    },
+    "v1FunctionStatus": {
+      "type": "object",
+      "properties": {
+        "phase": {
+          "$ref": "#/definitions/v1FunctionPhase"
+        },
+        "readyReplicas": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "observedVersion": {
+          "type": "string",
+          "format": "int64",
+          "description": "observed_version is the spec version the reconciler has reacted to."
+        },
+        "message": {
+          "type": "string",
+          "description": "message is a human-readable explanation of the current phase, primarily\nused when phase is DEGRADED or FAILED."
+        },
+        "lastTransitionTime": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "FunctionStatus is the observed state of a function. It is set by the\nreconciler and is read-only from a client perspective."
+    },
+    "v1GetFunctionResponse": {
+      "type": "object",
+      "properties": {
+        "function": {
+          "$ref": "#/definitions/v1Function"
+        }
+      }
+    },
+    "v1ListFunctionsResponse": {
+      "type": "object",
+      "properties": {
+        "functions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Function"
+          }
+        },
+        "nextPageToken": {
+          "type": "string"
+        }
+      }
+    },
+    "v1LogEntry": {
+      "type": "object",
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "pod": {
+          "type": "string",
+          "description": "pod is the name of the pod the line was read from."
+        },
+        "line": {
+          "type": "string",
+          "description": "line is the raw log line (without trailing newline)."
+        }
+      }
+    },
+    "v1UpdateFunctionResponse": {
+      "type": "object",
+      "properties": {
+        "function": {
+          "$ref": "#/definitions/v1Function"
+        }
+      }
+    }
+  }
+}
