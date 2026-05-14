@@ -1,0 +1,184 @@
+syntax = "proto3";
+
+package faas.v1;
+
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+option go_package = "github.com/uniqelus/faas/pkg/api/faas/v1;faasv1";
+
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  info: {
+    title: "FaaS Control API"
+    version: "v1"
+    description: "Control-plane API for managing functions on the FaaS platform."
+  }
+  schemes: HTTP
+  consumes: "application/json"
+  produces: "application/json"
+};
+
+// FunctionPhase describes the high-level lifecycle state of a function as
+// observed by the reconciler.
+enum FunctionPhase {
+  FUNCTION_PHASE_UNSPECIFIED = 0;
+  FUNCTION_PHASE_PENDING = 1;
+  FUNCTION_PHASE_READY = 2;
+  FUNCTION_PHASE_DEGRADED = 3;
+  FUNCTION_PHASE_DELETING = 4;
+  FUNCTION_PHASE_FAILED = 5;
+}
+
+// FunctionStatus is the observed state of a function. It is set by the
+// reconciler and is read-only from a client perspective.
+message FunctionStatus {
+  FunctionPhase phase = 1;
+  int32 ready_replicas = 2;
+  // observed_version is the spec version the reconciler has reacted to.
+  int64 observed_version = 3;
+  // message is a human-readable explanation of the current phase, primarily
+  // used when phase is DEGRADED or FAILED.
+  string message = 4;
+  google.protobuf.Timestamp last_transition_time = 5;
+}
+
+// Function describes a user function deployed on the platform.
+message Function {
+  // name uniquely identifies the function within the platform. It MUST match
+  // DNS-1123 label rules so it can be used as a Kubernetes resource name.
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
+  // image is a fully-qualified OCI image reference the platform will deploy.
+  string image = 2 [(google.api.field_behavior) = REQUIRED];
+  // replicas is the desired number of pods serving this function.
+  int32 replicas = 3;
+  // env is a flat key/value map of environment variables to inject into the
+  // function's pod template.
+  map<string, string> env = 4;
+  // version is monotonically incremented by the control-plane on each spec
+  // mutation. It is filled by the server.
+  int64 version = 5 [(google.api.field_behavior) = OUTPUT_ONLY];
+  google.protobuf.Timestamp created_at = 6 [(google.api.field_behavior) = OUTPUT_ONLY];
+  google.protobuf.Timestamp updated_at = 7 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // status is the observed state of the function.
+  FunctionStatus status = 8 [(google.api.field_behavior) = OUTPUT_ONLY];
+}
+
+message CreateFunctionRequest {
+  // function holds the desired spec. Output-only fields are ignored.
+  Function function = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+message CreateFunctionResponse {
+  Function function = 1;
+}
+
+message GetFunctionRequest {
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+message GetFunctionResponse {
+  Function function = 1;
+}
+
+message ListFunctionsRequest {
+  // page_size is a hint; the server may return fewer items.
+  int32 page_size = 1;
+  string page_token = 2;
+}
+
+message ListFunctionsResponse {
+  repeated Function functions = 1;
+  string next_page_token = 2;
+}
+
+message UpdateFunctionRequest {
+  // function carries the new desired state; function.name selects the target.
+  Function function = 1 [(google.api.field_behavior) = REQUIRED];
+  // update_mask restricts which fields of function are applied. When empty,
+  // all mutable fields are replaced.
+  google.protobuf.FieldMask update_mask = 2;
+}
+
+message UpdateFunctionResponse {
+  Function function = 1;
+}
+
+message DeleteFunctionRequest {
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+message DeleteFunctionResponse {}
+
+message GetFunctionLogsRequest {
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
+  // follow keeps the stream open and pushes new log lines as they arrive.
+  bool follow = 2;
+  // tail_lines, if positive, limits the initial backfill from the most recent
+  // log lines.
+  int32 tail_lines = 3;
+  // since, when set, filters out log lines emitted before this timestamp.
+  google.protobuf.Timestamp since = 4;
+}
+
+message LogEntry {
+  google.protobuf.Timestamp timestamp = 1;
+  // pod is the name of the pod the line was read from.
+  string pod = 2;
+  // line is the raw log line (without trailing newline).
+  string line = 3;
+}
+
+// FunctionService is the control-plane API for managing functions.
+service FunctionService {
+  // Create registers a new function with the platform. The reconciler will
+  // pick it up asynchronously and converge cluster state to the spec.
+  rpc Create(CreateFunctionRequest) returns (CreateFunctionResponse) {
+    option (google.api.http) = {
+      post: "/v1/functions"
+      body: "function"
+    };
+  }
+
+  // Get returns the current desired spec and observed status of a function.
+  rpc Get(GetFunctionRequest) returns (GetFunctionResponse) {
+    option (google.api.http) = {
+      get: "/v1/functions/{name}"
+    };
+  }
+
+  // List paginates over all registered functions.
+  rpc List(ListFunctionsRequest) returns (ListFunctionsResponse) {
+    option (google.api.http) = {
+      get: "/v1/functions"
+    };
+  }
+
+  // Update replaces the mutable parts of a function spec. The new version is
+  // allocated by the server.
+  rpc Update(UpdateFunctionRequest) returns (UpdateFunctionResponse) {
+    option (google.api.http) = {
+      patch: "/v1/functions/{function.name}"
+      body: "function"
+    };
+  }
+
+  // Delete marks a function for deletion. The reconciler will tear down
+  // Kubernetes resources and remove the database row once drained.
+  rpc Delete(DeleteFunctionRequest) returns (DeleteFunctionResponse) {
+    option (google.api.http) = {
+      delete: "/v1/functions/{name}"
+    };
+  }
+
+  // GetLogs streams log lines aggregated across all pods backing the
+  // function. The stream stays open while follow=true; otherwise it closes
+  // after backfill is drained.
+  rpc GetLogs(GetFunctionLogsRequest) returns (stream LogEntry) {
+    option (google.api.http) = {
+      get: "/v1/functions/{name}/logs"
+    };
+  }
+}
