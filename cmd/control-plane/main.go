@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/uniqelus/faas/internal/api-gateway/app"
+	"github.com/uniqelus/faas/internal/control-plane/app"
 	pkgconfig "github.com/uniqelus/faas/pkg/config"
 	pkglog "github.com/uniqelus/faas/pkg/log"
 )
@@ -18,7 +18,7 @@ const defaultShutdownTimeout = 30 * time.Second
 
 func main() {
 	if err := run(); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "api-gateway failed: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "control-plane failed: %v\n", err)
 		os.Exit(1)
 	}
 }

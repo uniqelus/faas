@@ -8,7 +8,7 @@ http_server:
   admin_port: 8081
 observability:
   service:
-    name: api-gateway
+    name: control-plane
     version: dev
     environment: local
   tracing:

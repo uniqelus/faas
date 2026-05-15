@@ -5,6 +5,8 @@ BINARIES_GOARCH ?= amd64
 BINARIES_CGO_ENABLED ?= 0
 
 PROTO_DIR ?= api/proto
+MOCKERY_VERSION ?= v3.7.0
+MOCKERY := go run github.com/vektra/mockery/v3@$(MOCKERY_VERSION)
 
 binaries: $(addsuffix -binary, $(SERVICES))
 %-binary:
@@ -18,7 +20,12 @@ lint:
 	golangci-lint run $(if $(FIX),,--fix) ./...
 
 test: lint
-	go test $(if $(RACE),-race,) ./...
+	@if [ "$(INTEGRATION)" = "1" ]; then \
+		$(MAKE) binaries; \
+		go test -tags=integration -v -count=1 $(if $(RACE),-race,) ./tests/integration/...; \
+	else \
+		go test $(if $(RACE),-race,) ./...; \
+	fi
 
 proto-gen:
 	$(MAKE) -C $(PROTO_DIR) generate
@@ -29,5 +36,11 @@ proto-lint:
 proto-breaking:
 	$(MAKE) -C $(PROTO_DIR) breaking
 
-.PHONY: binaries clean lint test proto-gen proto-lint proto-breaking
+mocks-config:
+	$(MOCKERY) --config .mockery.yml showconfig
+
+mocks-gen:
+	$(MOCKERY) --config .mockery.yml
+
+.PHONY: binaries clean lint test proto-gen proto-lint proto-breaking mocks-config mocks-gen
 
