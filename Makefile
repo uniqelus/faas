@@ -5,6 +5,8 @@ BINARIES_GOARCH ?= amd64
 BINARIES_CGO_ENABLED ?= 0
 
 PROTO_DIR ?= api/proto
+MOCKERY_VERSION ?= v3.7.0
+MOCKERY := go run github.com/vektra/mockery/v3@$(MOCKERY_VERSION)
 
 binaries: $(addsuffix -binary, $(SERVICES))
 %-binary:
@@ -34,5 +36,11 @@ proto-lint:
 proto-breaking:
 	$(MAKE) -C $(PROTO_DIR) breaking
 
-.PHONY: binaries clean lint test proto-gen proto-lint proto-breaking
+mocks-config:
+	$(MOCKERY) --config .mockery.yml showconfig
+
+mocks-gen:
+	$(MOCKERY) --config .mockery.yml
+
+.PHONY: binaries clean lint test proto-gen proto-lint proto-breaking mocks-config mocks-gen
 

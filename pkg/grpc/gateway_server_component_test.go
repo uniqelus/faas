@@ -11,12 +11,12 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/stretchr/testify/assert"
+	testifymock "github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 	"google.golang.org/grpc"
@@ -27,42 +27,6 @@ import (
 	pkggrpc "github.com/uniqelus/faas/pkg/grpc"
 	pkghttp "github.com/uniqelus/faas/pkg/http"
 )
-
-// mockFunctionService satisfies the FunctionServiceServer contract with
-// behavior controllable by individual tests.
-type mockFunctionService struct {
-	faasv1.UnimplementedFunctionServiceServer
-
-	mu        sync.Mutex
-	createReq *faasv1.CreateFunctionRequest
-
-	logsToSend []*faasv1.LogEntry
-	logsErr    error
-}
-
-func (m *mockFunctionService) Create(_ context.Context, req *faasv1.CreateFunctionRequest) (*faasv1.CreateFunctionResponse, error) {
-	m.mu.Lock()
-	m.createReq = req
-	m.mu.Unlock()
-
-	echoed := req.GetFunction()
-	if echoed == nil {
-		echoed = &faasv1.Function{}
-	}
-	echoed.Version = 1
-	echoed.CreatedAt = timestamppb.New(time.Unix(1_700_000_000, 0).UTC())
-	echoed.UpdatedAt = echoed.CreatedAt
-	return &faasv1.CreateFunctionResponse{Function: echoed}, nil
-}
-
-func (m *mockFunctionService) GetLogs(_ *faasv1.GetFunctionLogsRequest, stream grpc.ServerStreamingServer[faasv1.LogEntry]) error {
-	for _, entry := range m.logsToSend {
-		if err := stream.Send(entry); err != nil {
-			return err
-		}
-	}
-	return m.logsErr
-}
 
 func startGateway(t *testing.T, opts ...pkggrpc.GatewayServerComponentOption) (*pkggrpc.GatewayServerComponent, context.CancelFunc) {
 	t.Helper()
@@ -120,7 +84,23 @@ func startGateway(t *testing.T, opts ...pkggrpc.GatewayServerComponentOption) (*
 func TestGatewayServerComponent_ProxiesUnaryRPC(t *testing.T) {
 	t.Parallel()
 
-	mock := &mockFunctionService{}
+	mock := faasv1.NewMockFunctionServiceServer(t)
+	var capturedReq *faasv1.CreateFunctionRequest
+	mock.EXPECT().
+		Create(testifymock.Anything, testifymock.AnythingOfType("*faasv1.CreateFunctionRequest")).
+		RunAndReturn(func(_ context.Context, req *faasv1.CreateFunctionRequest) (*faasv1.CreateFunctionResponse, error) {
+			capturedReq = req
+			echoed := req.GetFunction()
+			if echoed == nil {
+				echoed = &faasv1.Function{}
+			}
+			echoed.Version = 1
+			echoed.CreatedAt = timestamppb.New(time.Unix(1_700_000_000, 0).UTC())
+			echoed.UpdatedAt = echoed.CreatedAt
+			return &faasv1.CreateFunctionResponse{Function: echoed}, nil
+		}).
+		Once()
+
 	register := func(s *grpc.Server) {
 		faasv1.RegisterFunctionServiceServer(s, mock)
 	}
@@ -158,22 +138,31 @@ func TestGatewayServerComponent_ProxiesUnaryRPC(t *testing.T) {
 	assert.Equal(t, int32(3), decoded.Function.Replicas)
 	assert.Equal(t, "1", decoded.Function.Version)
 
-	mock.mu.Lock()
-	defer mock.mu.Unlock()
-	require.NotNil(t, mock.createReq)
-	assert.Equal(t, "demo", mock.createReq.GetFunction().GetName())
+	require.NotNil(t, capturedReq)
+	assert.Equal(t, "demo", capturedReq.GetFunction().GetName())
 }
 
 func TestGatewayServerComponent_ServerStreamMapsToChunkedHTTP(t *testing.T) {
 	t.Parallel()
 
-	mock := &mockFunctionService{
-		logsToSend: []*faasv1.LogEntry{
-			{Pod: "pod-a", Line: "line-1", Timestamp: timestamppb.New(time.Unix(1_700_000_001, 0).UTC())},
-			{Pod: "pod-a", Line: "line-2", Timestamp: timestamppb.New(time.Unix(1_700_000_002, 0).UTC())},
-			{Pod: "pod-b", Line: "line-3", Timestamp: timestamppb.New(time.Unix(1_700_000_003, 0).UTC())},
-		},
+	mock := faasv1.NewMockFunctionServiceServer(t)
+	logsToSend := []*faasv1.LogEntry{
+		{Pod: "pod-a", Line: "line-1", Timestamp: timestamppb.New(time.Unix(1_700_000_001, 0).UTC())},
+		{Pod: "pod-a", Line: "line-2", Timestamp: timestamppb.New(time.Unix(1_700_000_002, 0).UTC())},
+		{Pod: "pod-b", Line: "line-3", Timestamp: timestamppb.New(time.Unix(1_700_000_003, 0).UTC())},
 	}
+	mock.EXPECT().
+		GetLogs(testifymock.AnythingOfType("*faasv1.GetFunctionLogsRequest"), testifymock.Anything).
+		RunAndReturn(func(_ *faasv1.GetFunctionLogsRequest, stream grpc.ServerStreamingServer[faasv1.LogEntry]) error {
+			for _, entry := range logsToSend {
+				if err := stream.Send(entry); err != nil {
+					return err
+				}
+			}
+			return nil
+		}).
+		Once()
+
 	register := func(s *grpc.Server) {
 		faasv1.RegisterFunctionServiceServer(s, mock)
 	}
@@ -229,7 +218,14 @@ func TestGatewayServerComponent_InterceptorPropagatesContext(t *testing.T) {
 	const traceHeader = "X-Trace-Id"
 	const expectedTrace = "trace-from-http-001"
 
-	mock := &mockFunctionService{}
+	mock := faasv1.NewMockFunctionServiceServer(t)
+	mock.EXPECT().
+		Create(testifymock.Anything, testifymock.AnythingOfType("*faasv1.CreateFunctionRequest")).
+		Return(&faasv1.CreateFunctionResponse{
+			Function: &faasv1.Function{Name: "trace-demo", Version: 1},
+		}, nil).
+		Once()
+
 	register := func(s *grpc.Server) {
 		faasv1.RegisterFunctionServiceServer(s, mock)
 	}
