@@ -18,7 +18,12 @@ lint:
 	golangci-lint run $(if $(FIX),,--fix) ./...
 
 test: lint
-	go test $(if $(RACE),-race,) ./...
+	@if [ "$(INTEGRATION)" = "1" ]; then \
+		$(MAKE) binaries; \
+		go test -tags=integration -v -count=1 $(if $(RACE),-race,) ./tests/integration/...; \
+	else \
+		go test $(if $(RACE),-race,) ./...; \
+	fi
 
 proto-gen:
 	$(MAKE) -C $(PROTO_DIR) generate

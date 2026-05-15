@@ -1,0 +1,20 @@
+grpc_server:
+  host: 127.0.0.1
+  port: 18000
+http_server:
+  host: 127.0.0.1
+  port: 18080
+  admin_host: 127.0.0.1
+  admin_port: 18081
+observability:
+  service:
+    name: api-gateway-test
+    version: integration
+    environment: test
+  tracing:
+    enabled: false
+  metrics:
+    enabled: true
+log:
+  level: info
+  encoding: json

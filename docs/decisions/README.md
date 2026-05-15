@@ -61,3 +61,5 @@
 | 0004 | [Observability в скоупе MVP](0004-observability-in-mvp.md)            | Accepted |
 | 0005 | [Один umbrella Helm-чарт](0005-helm-umbrella-chart.md)                | Accepted |
 | 0006 | [Plain API + Postgres, без CRD](0006-no-crd-plain-api-with-postgres.md) | Accepted |
+| 0007 | [BDD feature ownership через сервисные теги](0007-bdd-service-tags-ownership.md) | Superseded by 0008 |
+| 0008 | [Дизайн интеграционных тестов на Godog](0008-godog-integration-test-design.md) | Accepted |

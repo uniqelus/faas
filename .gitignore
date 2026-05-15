@@ -31,3 +31,5 @@ go.work.sum
 # .idea/
 # .vscode/
 bin/
+tests/integration/logs/
+tests/integration/features/*/logs/
