@@ -13,20 +13,14 @@ import (
 )
 
 type App struct {
-	log             *zap.Logger
-	grpcServer      *pkggrpc.ServerComponent
-	gatewayServer   *pkggrpc.GatewayServerComponent
-	tracerProvider  *pkgobs.TracerProvider
-	metricsProvider *pkgobs.MetricsProvider
+	log            *zap.Logger
+	grpcServer     *pkggrpc.ServerComponent
+	gatewayServer  *pkggrpc.GatewayServerComponent
+	metricsHandler *pkgobs.MetricsProvider
 }
 
 func NewApp(cfg *Config, log *zap.Logger) (*App, error) {
-	log = log.With(zap.String("application", "api-gateway"))
-
-	tracerProvider, err := pkgobs.NewTracerProvider(context.Background(), cfg.Observability.TracingOptions()...)
-	if err != nil {
-		return nil, fmt.Errorf("init tracer provider: %w", err)
-	}
+	log = log.With(zap.String("application", "control-plane"))
 
 	metricsProvider, err := pkgobs.NewMetricsProvider(cfg.Observability.MetricsOptions()...)
 	if err != nil {
@@ -52,21 +46,17 @@ func NewApp(cfg *Config, log *zap.Logger) (*App, error) {
 	}
 
 	return &App{
-		log:             log,
-		grpcServer:      grpcServer,
-		gatewayServer:   gatewayServer,
-		tracerProvider:  tracerProvider,
-		metricsProvider: metricsProvider,
+		log:            log,
+		grpcServer:     grpcServer,
+		gatewayServer:  gatewayServer,
+		metricsHandler: metricsProvider,
 	}, nil
 }
 
 func (a *App) Start(ctx context.Context) error {
-	tracedCtx, span := a.tracerProvider.Tracer("api-gateway.app").Start(ctx, "app.start")
-	defer span.End()
+	a.log.Info("starting application")
 
-	pkgobs.WithSpanContext(tracedCtx, a.log).Info("starting application")
-
-	g, gCtx := errgroup.WithContext(tracedCtx)
+	g, gCtx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
 		return a.grpcServer.Start(gCtx)
@@ -76,7 +66,7 @@ func (a *App) Start(ctx context.Context) error {
 	})
 
 	if err := g.Wait(); err != nil {
-		pkgobs.WithSpanContext(tracedCtx, a.log).Error("failed to start application", zap.Error(err))
+		a.log.Error("failed to start application", zap.Error(err))
 		return err
 	}
 
@@ -84,27 +74,23 @@ func (a *App) Start(ctx context.Context) error {
 }
 
 func (a *App) Stop(ctx context.Context) error {
-	pkgobs.WithSpanContext(ctx, a.log).Info("stopping application")
+	a.log.Info("stopping application")
 
 	g, gCtx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
-		return a.grpcServer.Stop(gCtx)
-	})
-	g.Go(func() error {
 		return a.gatewayServer.Stop(gCtx)
 	})
 	g.Go(func() error {
-		return a.metricsProvider.Shutdown(gCtx)
+		return a.grpcServer.Stop(gCtx)
+	})
+	g.Go(func() error {
+		return a.metricsHandler.Shutdown(gCtx)
 	})
 
 	if err := g.Wait(); err != nil {
-		pkgobs.WithSpanContext(ctx, a.log).Error("failed to stop application", zap.Error(err))
+		a.log.Error("failed to stop application", zap.Error(err))
 		return err
-	}
-
-	if err := a.tracerProvider.Shutdown(ctx); err != nil {
-		pkgobs.WithSpanContext(ctx, a.log).Warn("failed to stop tracer provider", zap.Error(err))
 	}
 
 	return nil
